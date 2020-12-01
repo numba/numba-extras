@@ -27,8 +27,8 @@ packages = find_packages(include=["numba_extras", "numba_extras.*"])
 # ]
 
 metadata = dict(
-    name='numba',
-    description="compiling Python code using LLVM",
+    name='numba-extras',
+    # description="compiling Python code using LLVM",
     # version=versioneer.get_version(),
     classifiers=[
         "Development Status :: 4 - Beta",
