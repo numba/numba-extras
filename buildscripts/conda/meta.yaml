@@ -1,0 +1,31 @@
+package:
+   name: numba-extras
+   version: {{ environ.get('GIT_DESCRIBE_TAG', 'unknown').lstrip('v') }}
+
+source:
+   path: ../..
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0)|int }}
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+  noarch: python
+
+requirements:
+  build:
+    - python >=3.6
+  run:
+    - python >=3.6
+    - numba >=0.52.0
+
+test:
+  requires:
+    - pytest
+    - black =20.8b1
+  commands:
+    - py.test --pyargs numba_extras
+
+about:
+  home: https://github.com/numba/numba-extras
+  license: BSD
+  license_file: LICENSE
+  summary: Extra features for Numba
