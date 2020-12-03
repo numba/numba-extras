@@ -1,35 +1,19 @@
-# import os
-# import platform
-# import sys
-# from distutils import sysconfig
-# from distutils.command import build
-# from distutils.command.build_ext import build_ext
-# from distutils.spawn import spawn
 from setuptools import find_packages, setup
-# import versioneer
-# versioneer.VCS = 'git'
-# versioneer.versionfile_source = 'numba/_version.py'
-# versioneer.versionfile_build = 'numba/_version.py'
-# versioneer.tag_prefix = ''
-# versioneer.parentdir_prefix = 'numba-'
+import versioneer
 
-# cmdclass = versioneer.get_cmdclass()
-# cmdclass['build_doc'] = build_doc
+min_python_version = "3.6"
+max_python_version = "3.9"
 
+min_numba_version = "0.52.0"
+install_requires = [
+    "numba >={}".format(min_numba_version),
+]
 
 packages = find_packages(include=["numba_extras", "numba_extras.*"])
-
-# build_requires = ['numpy >={}'.format(min_numpy_build_version)]
-# install_requires = [
-#     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
-#     'numpy >={}'.format(min_numpy_run_version),
-#     'setuptools',
-# ]
-
 metadata = dict(
-    name='numba-extras',
-    # description="compiling Python code using LLVM",
-    # version=versioneer.get_version(),
+    name="numba-extras",
+    description="Extra features for Numba",
+    version=versioneer.get_version(),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -42,33 +26,16 @@ metadata = dict(
         "Programming Language :: Python :: 3.8",
         "Topic :: Software Development :: Compilers",
     ],
-    # package_data={
-    #     # HTML templates for type annotations
-    #     "numba.core.annotations": ["*.html"],
-    #     # Various test data
-    #     "numba.cuda.tests.cudadrv.data": ["*.ptx"],
-    #     "numba.tests": ["pycc_distutils_usecase/*.py"],
-    #     # Some C files are needed by pycc
-    #     "numba": ["*.c", "*.h"],
-    #     "numba.pycc": ["*.c", "*.h"],
-    #     "numba.core.runtime": ["*.c", "*.h"],
-    #     "numba.cext": ["*.c", "*.h"],
-    #     # numba gdb hook init command language file
-    #     "numba.misc": ["cmdlang.gdb"],
-    # },
-    # scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
-    # author_email="numba-users@continuum.io",
-    url="https://numba.github.com",
+    url="https://github.com/numba/numba-extras",
     packages=packages,
-    # setup_requires=build_requires,
-    # install_requires=install_requires,
-    # python_requires=">={},<{}".format(min_python_version, max_python_version),
+    install_requires=install_requires,
+    python_requires=">={},<{}".format(min_python_version, max_python_version),
     license="BSD",
-    # cmdclass=cmdclass,
 )
 
-# with open('README.rst') as f:
-#     metadata['long_description'] = f.read()
+with open("README.md") as f:
+    metadata["long_description"] = f.read()
+    metadata["long_description_content_type"] = "text/markdown"
 
 setup(**metadata)
