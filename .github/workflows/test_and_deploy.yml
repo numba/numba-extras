@@ -39,14 +39,14 @@ jobs:
       - name: Pytest
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
-          conda activate mg
+          conda activate ci
           pytest numba_extras
       - name: Conda Build
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
           conda build --python ${{ env.MAIN_PYVER }} -c defaults -c numba -c conda-forge buildscripts/conda
           # This doesn't rebuild, but simply computes the name of the file that was previously built
-          OUTPUT=$(conda build --python ${{ env.MAIN_PYVER }} -c defaults -c numba -c conda-forge buildscripts/conda)
+          OUTPUT=$(conda build --output --python ${{ env.MAIN_PYVER }} -c defaults -c numba -c conda-forge buildscripts/conda)
           echo "Path to built package:"
           echo $OUTPUT
           echo "CONDA_BUILD_OUTPUT=$OUTPUT" >> $GITHUB_ENV
@@ -80,21 +80,20 @@ jobs:
           source "$CONDA/etc/profile.d/conda.sh"
           conda config --set always_yes yes --set changeps1 no
           conda update -q conda
-          conda create -n ci python=${{ matrix.pyver }} pytest
+          conda create -n ci python=${{ matrix.pyver }} pytest conda-build
           conda activate ci
           # Setup a local channel
           BUILT_PKG=`ls ./artifact_storage | head -1`
-          conda install ./artifact_storage/$BUILT_PKG numba::numba=0.52.0
           mkdir -p my_channel/noarch
+          mv ./artifact_storage/$BUILT_PKG my_channel/noarch/
           cd my_channel
-          mv ./artifact_storage/$BUILT_PKG noarch/
           conda index .
           cd ..
           # Install artifact
-          conda install -c ./my_channel -c numba numba-extras
+          conda install -q -c ./my_channel -c numba numba-extras
           conda list
       - name: Pytest
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate ci
-          pytest --pyarg numba_extras
+          pytest --pyargs numba_extras
