@@ -1,0 +1,8 @@
+name: dev3.8
+dependencies:
+# dev environment
+  - python=3.8
+  - pytest
+  - conda-forge::black=20.8b1
+
+  - numba::numba=0.52.0

@@ -1,0 +1,7 @@
+repos:
+-   repo: https://github.com/psf/black
+    rev: 20.8b1
+    hooks:
+    - id: black
+      # the following is needed because of https://github.com/psf/black/issues/438
+      exclude: ^(versioneer.py|numba_extras/_version.py)$
