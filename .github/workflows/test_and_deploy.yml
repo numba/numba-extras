@@ -92,6 +92,11 @@ jobs:
           # Install artifact
           conda install -q -c ./my_channel -c numba numba-extras
           conda list
+      - name: numba system check
+        run: |
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate ci
+          numba -s
       - name: Pytest
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
