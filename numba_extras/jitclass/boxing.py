@@ -36,6 +36,7 @@ def define_boxing(struct_type: Type, obj_class: Type):
         """
         Convert a raw pointer to a Python int.
         """
+        # import pdb; pdb.set_trace()
         utils = _Utils(c.context, c.builder, typ)
         struct_ref = utils.get_struct_ref(val)
         meminfo = struct_ref.meminfo

@@ -21,7 +21,8 @@ import copy
 import weakref
 
 from numba_extras.jitclass.typemap import python_numba_type_map, PType
-from numba_extras.jitclass.serialization_utils import SerializableStructRefProxyMeta
+# from numba_extras.jitclass.serialization_utils import SerializableStructRefProxyMeta
+from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
 import numba
 from numba.core.types.functions import Function
 from numba.core.types import Type as NType
@@ -124,7 +125,9 @@ class _GenericAlias(ReduceMixin):
 
     @classmethod
     def _rebuild(cls, wrapee, params):
-        wrapee = SerializableStructRefProxyMeta._rebuild(**wrapee)
+        # wrapee = SerializableStructRefProxyMeta._rebuild(**wrapee)
+        wrapee = StructRefProxySerializer._rebuild(**wrapee)
+
         return cls(wrapee, params)
 
 

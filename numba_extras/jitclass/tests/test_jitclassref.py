@@ -148,6 +148,7 @@ def test_jitclass_is_same():
 def test_single_member_python():
     jitted = jitclass(SingleMember)
     interpreted = SingleMember
+    # import pdb; pdb.set_trace()
 
     def get_list():
         l = TList.empty_list(types.int64)
@@ -361,7 +362,7 @@ def test_single_list():
 #     def get_list(typ, val):
 #         import pdb; pdb.set_trace()
 #         ls = TList.empty_list(typ)
-#         import pdb; pdb.set_trace()
+#         # import pdb; pdb.set_trace()
 #         ls.append(val)
 
 #         return ls
@@ -418,10 +419,13 @@ def test_trivial_single_member_jit():
     jitted = jitclass(TrivialSingleMember)
     interpreted = TrivialSingleMember
 
+    # import pdb; pdb.set_trace()
     def init():
         return TrivialSingleMember(10)
 
-    ji = njit(init)()
+    # import pdb; pdb.set_trace()
+    # ji = njit(init)()
+    ji = jitted(10)
     ii = init()
 
     assert ii == ji
@@ -439,4 +443,44 @@ def test_callable():
 
     test()
 
-# test_single_list_single_member()
+# def test_pass_type():
+#     jitted = jitclass(TrivialSingleMember)
+#     # tj = type(jitted)
+
+#     import pdb; pdb.set_trace()
+#     # @njit
+#     # def test():
+#     #     return tj()
+#     @njit
+#     def test(typ):
+#         return typ(10)
+#         # a = typ(10)
+
+#         # return a(32)
+
+#     a = test(jitted)
+#     # test()
+#     # a = jitted(10)
+#     # import pdb; pdb.set_trace()
+#     print(a)
+
+# def test_single_list_trivial():
+#     interpreted = TrivialSingleMember
+#     jitted = jitclass(TrivialSingleMember)
+
+#     @njit
+#     def get_list(typ, val):
+#         ls = TList.empty_list(typ)
+#         ls.append(val)
+
+#         return ls
+
+#     # jitted(10)
+#     # ls = get_list(jitted, jitted(10))
+#     ls = get_list(types.int64, 10)
+
+import sys
+
+# test_trivial_single_member_jit()
+# test_pass_type()
+# test_single_list_trivial()

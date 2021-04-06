@@ -20,6 +20,7 @@ from numba.experimental import structref
 from numba.experimental.structref import _Utils
 
 from numba.core.extending import box, overload
+from numba.core.imputils import lower_constant
 
 from numba_extras.jitclass.typing_utils import (
     _GenericAlias,
@@ -79,8 +80,24 @@ class ClassDescriptor:
         name = cls.__name__
 
         # self is not properly initialized yet. Anything except capturing may result in wierd things
-        # import pdb; pdb.set_trace()
-        ref_cls, proxy_cls = jitclass.make_ref_and_proxy_types(name, cls, wrapped_methods, members, params, methods, self)
+        ref_meta, proxy_meta = jitclass.make_ref_and_proxy_metas(name, cls, wrapped_methods, members, params, methods, self)
+        define_boxing(ref_meta, proxy_meta)
+
+        from numba.core import cgutils
+        ref_meta_inst = ref_meta({})
+        @lower_constant(ref_meta_inst)
+        def lower(context, builder, ty, pyval):
+            import pdb; pdb.set_trace()
+            obj = cgutils.create_struct_proxy(typ)(context, builder)
+            return obj._getvalue()
+
+        # init = self.init
+        self.init = None
+        meta_ctor = self.__make_constructor(ref_meta_inst)
+        self._meta_ctor = lambda cls, *args, **kwargs: meta_ctor()
+        # self.init = None
+
+        ref_cls, proxy_cls = jitclass.make_ref_and_proxy_types(name, cls, wrapped_methods, members, params, methods, proxy_meta, self)
 
         define_boxing(ref_cls, proxy_cls)
         # TODO more args to 'init'
@@ -184,6 +201,7 @@ class ClassDescriptor:
         return {var.__name__: typ for var, typ in mapped_parameters.items()}
 
     def __make_constructor(self, struct_type: types.StructRef) -> Callable:
+        # import pdb; pdb.set_trace()
         ctor = make_constructor(self.init, struct_type)
         ctor_impl = njit(ctor)
         ctor_impl.__numba_class_type__ = struct_type
@@ -196,6 +214,19 @@ class ClassDescriptor:
         members = self.__resolve_members(mapped_parameters)
         struct_type = self.ref_type(members)
         struct_type.mapped_parameters = self.__name_to_type_mapping(mapped_parameters)
+        self.proxy_type._type.instance_type = struct_type
+
+        # def instance_type():
+        #     import pdb; pdb.set_trace()
+
+        #     return struct_type
+        # struct_type.instance_type = struct_type
+        # struct_type.instance_type = lambda: None
+        # import pdb; pdb.set_trace()
+        # try:
+        #     print(struct_type.instance_type)
+        # except:
+        #     pass
 
         return struct_type
 
@@ -221,3 +252,6 @@ class ClassDescriptor:
             self.specificized[_args] = specificized
 
         return specificized
+
+    def _meta_constructor(self, cls, *args, **kwargs):
+        return self._meta_ctor(*args, **kwargs)

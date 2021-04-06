@@ -187,20 +187,30 @@ def len_ovld(self):
 
 
 def make_constructor(init, struct_type):
-    sig = params_without_self(init)
-    args_str = sig_to_str(sig)
-    frwd_args = ",".join(sig.parameters.keys())
+    if init is not None:
+        sig = params_without_self(init)
+        args_str = sig_to_str(sig)
+        frwd_args = ",".join(sig.parameters.keys())
 
-    body = f"""
-        st = new(struct_type)
-        init(st, {frwd_args})
+        body = f"""
+            st = new(struct_type)
+            init(st, {frwd_args})
 
-        return st
-    """
+            return st
+        """
 
-    glbls = {"struct_type": struct_type, "init": init, "new": structref.new}
+        glbls = {"struct_type": struct_type, "init": init, "new": structref.new}
 
-    return make_function("ctor", args_str, body, glbls)
+        return make_function("ctor", args_str, body, glbls)
+    else:
+        args_str = sig_to_str(inspect.signature(lambda: None))
+        body = f"""
+            return new(struct_type)
+        """
+
+        glbls = {"struct_type": struct_type, "new": structref.new}
+
+        return make_function("ctor", args_str, body, glbls)
 
 
 def make_property(class_name, member_name):

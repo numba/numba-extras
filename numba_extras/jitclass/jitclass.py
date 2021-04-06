@@ -54,7 +54,8 @@ from numba_extras.jitclass.overload_utils import (
 from numba_extras.jitclass.serialization_utils import (
     class_info_attr,
     ClassInfo,
-    SerializableStructRefProxyMeta,
+    StructRefProxyMeta,
+    # SerializableStructRefProxyMeta,
     SerializableStructRefProxyMetaType,
     SerializableBoxing,
     SerializableStructRef,
@@ -118,11 +119,12 @@ class jitclass:
     MembersDict = Dict[str, Any]
     MethodsDict = Dict[str, Callable]
 
-    class_info_attr = "__class_info"
+    # class_info_attr = "__class_info"
 
     # class variables
     __class_types: ClassVar[ClassTypes] = {}
     __cache: ClassVar[JitClassCache] = {}
+    __meta_cache: ClassVar[JitClassCache] = {}
 
     # members
     params: _Params
@@ -158,10 +160,15 @@ class jitclass:
         if cls in self.__cache:
             return self.__cache[cls]
 
+        if not issubclass(cls, typing.Generic):
+            pass
+
         class_descr = ClassDescriptor(self, cls, self.params)
         proxy_type = class_descr.proxy_type
         jitclass.__class_types[proxy_type] = class_descr
         jitclass.__class_types[cls] = class_descr
+
+        # import pdb; pdb.set_trace()
 
         return proxy_type
 
@@ -263,7 +270,7 @@ class jitclass:
 
         # TODO figure out if we need it?
         def __new__(cls, *args, **kwargs):
-            return object.__new__(cls)
+            return type.__new__(cls, *args, **kwargs)
 
         return {
             '__new__': __new__,
@@ -296,10 +303,50 @@ class jitclass:
     def make_class_info(cls: Type, parameters: _Params):
         return {class_info_attr: ClassInfo(cls, parameters)}
 
+    @staticmethod
+    def __make_proxy_class_meta(
+        name: str, cls: Type, methods: MethodsDict, members: MembersDict, params: _Params, class_descr: ClassDescriptor,
+    ):
+        class_info = jitclass.make_class_info(cls, params)
+
+        def ctor(cls, name, bases, dct):
+            return class_descr._meta_constructor(cls, name, bases, dct)
+
+        # def __init__(self, name, bases, dct):
+        #     return super().__init__(name, bases, dct)
+
+        proxy_meta = SerializableStructRefProxyMetaType(
+            name,
+            # (StructRefProxyMeta,),
+            # {**class_info, '__new__': lambda cls, *args, **kwargs: class_descr._meta_constructor(cls, *args, **kwargs)}
+            # {**class_info, '__new__': __new__, '__init__': __init__}
+            {**class_info, 'ctor': ctor}
+        )
+        # proxy_meta = ptypes.new_class(
+        #     name,
+        #     (StructRefProxyMeta,),
+        #     {"metaclass": SerializableStructRefProxyMetaType},
+        #     # lambda ns: ns.update({**class_info, '__new__': lambda cls, *args, **kwargs: class_descr._meta_constructor(cls, *args, **kwargs)})
+        #     lambda ns: ns.update(**class_info)
+        #     # lambda ns: ns.update(members),
+        # )
+
+        # import pdb; pdb.set_trace()
+        jitclass.__meta_cache[cls] = proxy_meta
+
+        @overload(proxy_meta)
+        def meta_ovld():
+            def impl():
+                return None
+
+            return impl
+
+        return proxy_meta
+
     # creates python proxy for our jitclass
     @staticmethod
     def __make_proxy_class(
-        name: str, cls: Type, methods: MethodsDict, members: MembersDict, params: _Params, class_descr: ClassDescriptor,
+        name: str, cls: Type, methods: MethodsDict, members: MembersDict, params: _Params, meta: Type, class_descr: ClassDescriptor,
     ):
         wrapped_members = jitclass.wraped_members(name, methods, members)
         template_parameters = get_parameters(cls)
@@ -311,10 +358,14 @@ class jitclass:
         # import pdb; pdb.set_trace()
         # proxy_meta = ptypes.new_class(
         #     f'{name}_meta',
-        #     (StructRefProxy, type),
+        #     (SerializableStructRefProxyMeta,),
         #     {"metaclass": SerializableStructRefProxyMetaType},
+        #     lambda ns: ns.update({**class_info, '__new__': lambda cls, *args, **kwargs: class_descr._meta_constructor(cls, *args, **kwargs)})
         #     # lambda ns: ns.update(members),
         # )
+
+        # p_class = proxy_meta(name, (SerializableStructRefProxyMeta, StructRefProxy, ), {})
+
 
         # p_class = ptypes.new_class(
         #     name,
@@ -323,45 +374,58 @@ class jitclass:
         #     lambda ns: ns.update(members),
         # )
 
+        # proxy_class = meta(name, (StructRefProxy,), members)
+        proxy_class = meta.create(members)
+        # import pdb; pdb.set_trace()
+
         # proxy_class = type(name, (jitclass._SerializableStructRefProxy, ), members)
-        proxy_class = ptypes.new_class(
-            name,
-            # (structref.StructRefProxy,),
-            (StructRefProxy,),
-            {"metaclass": SerializableStructRefProxyMeta},
-            lambda ns: ns.update(members),
-        )
+        # proxy_class = ptypes.new_class(
+        #     name,
+        #     # (structref.StructRefProxy,),
+        #     (StructRefProxy,),
+        #     {"metaclass": SerializableStructRefProxyMeta},
+        #     lambda ns: ns.update(members),
+        # )
 
         # proxy_class._numba_box_ = SerializableBoxing(proxy_class)  # type: ignore
 
         return proxy_class
 
     @staticmethod
-    def __make_ref_class(name, proxy_cls, methods):
-        return SerializableStructRef.create(name, proxy_cls, methods.get('__call__'))
+    def __make_ref_class(name, proxy_cls):
+        return SerializableStructRef.create(name, proxy_cls, None)
 
     @staticmethod
     def make_ref_and_proxy_types(
-        name: str, cls: Type, wrapped_methods: MethodsDict, members: MembersDict, params: _Params, methods: MethodsDict, class_descr: ClassDescriptor,
+        name: str, cls: Type, wrapped_methods: MethodsDict, members: MembersDict, params: _Params, methods: MethodsDict, meta: Type, class_descr: ClassDescriptor,
     ):
-        proxy_cls = jitclass.__make_proxy_class(name, cls, wrapped_methods, members, params, class_descr)
-        ref_cls = jitclass.__make_ref_class(name, proxy_cls, methods)
+        proxy_cls = jitclass.__make_proxy_class(name, cls, wrapped_methods, members, params, meta, class_descr)
+        ref_cls = jitclass.__make_ref_class(f'{name}_ref', proxy_cls)
 
         jitclass.__cache[cls] = proxy_cls
 
         return ref_cls, proxy_cls
 
-    @classmethod
-    def from_class_info(cls, class_info: ClassInfo):
-        proxy_cls = class_info.get_class()
+    @staticmethod
+    def make_ref_and_proxy_metas(
+        name: str, cls: Type, wrapped_methods: MethodsDict, members: MembersDict, params: _Params, methods: MethodsDict, class_descr: ClassDescriptor,
+    ):
+        proxy_meta = jitclass.__make_proxy_class_meta(name, cls, wrapped_methods, members, params, class_descr)
+        ref_meta = jitclass.__make_ref_class(f'{proxy_meta.__name__}_ref', proxy_meta)
 
-        # if jitclass._SerializableStructRefProxy not in proxy_cls.__bases__:
-        # if structref.StructRefProxy not in proxy_cls.__bases__:
-        if StructRefProxy not in proxy_cls.__bases__:
-            params = class_info.params._asdict()
-            proxy_cls = cls(**params)(proxy_cls)
+        return ref_meta, proxy_meta
 
-        return proxy_cls
+    # @classmethod
+    # def from_class_info(cls, class_info: ClassInfo):
+    #     proxy_cls = class_info.get_class()
+
+    #     # if jitclass._SerializableStructRefProxy not in proxy_cls.__bases__:
+    #     # if structref.StructRefProxy not in proxy_cls.__bases__:
+    #     if StructRefProxy not in proxy_cls.__bases__:
+    #         params = class_info.params._asdict()
+    #         proxy_cls = cls(**params)(proxy_cls)
+
+    #     return proxy_cls
 
     @classmethod
     def method_options(cls, func: Callable, values: Dict[str, Any]):
@@ -383,3 +447,7 @@ class jitclass:
     def do_not_compile(cls, func):
         compile = method_option.compile_attr
         return cls.method_options(func, {compile: False})
+
+    @classmethod
+    def get_meta(cls, orig_class, params):
+        return cls.__meta_cache[orig_class]
