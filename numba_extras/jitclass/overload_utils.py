@@ -187,6 +187,7 @@ def len_ovld(self):
 
 
 def make_constructor(init, struct_type):
+    # import pdb; pdb.set_trace()
     if init is not None:
         sig = params_without_self(init)
         args_str = sig_to_str(sig)

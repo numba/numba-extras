@@ -443,6 +443,10 @@ def test_callable():
 
     test()
 
+def test_generic():
+    jitted = jitclass(SingleMember)
+
+    jitted[int]
 # def test_pass_type():
 #     jitted = jitclass(TrivialSingleMember)
 #     # tj = type(jitted)
@@ -482,5 +486,6 @@ def test_callable():
 import sys
 
 # test_trivial_single_member_jit()
+test_generic()
 # test_pass_type()
 # test_single_list_trivial()

@@ -2,7 +2,7 @@ import sys
 import weakref
 
 import typing_extensions as typing
-from typing import Dict, Type, Optional, Any, Callable, ClassVar, Mapping
+from typing import Dict, Type, Optional, Any, Callable, ClassVar, Mapping, Generic
 
 from numba import types
 from numba.experimental import structref
@@ -91,6 +91,7 @@ class SerializableBoxing(ReduceMixin):
         self.cls = cls
 
     def __call__(self, ty, mi):
+        import pdb; pdb.set_trace()
         return self.cls.__box__(ty, mi)
 
     def _reduce_states(self):
@@ -147,6 +148,53 @@ class StructRefProxy:
         return self._type
 
 
+
+
+
+from numba import njit
+
+from numba_extras.jitclass.typing_utils import (
+    _GenericAlias,
+    get_annotated_members,
+    get_parameters,
+    resolve_members,
+    resolve_function_typevars,
+    MappedParameters,
+    MembersDict,
+    MethodsDict,
+    ResolvedMembersList,
+    NType,
+)
+
+# from numba_extras.jitclass.typing_utils import (
+#     _GenericAlias,
+#     get_annotated_members,
+#     get_parameters,
+#     resolve_type,
+#     resolve_members,
+#     get_class,
+#     MappedParameters,
+#     MembersDict,
+#     MethodsDict,
+#     ResolvedMembersList,
+#     NType,
+# )
+
+from numba_extras.jitclass.overload_utils import (
+    get_methods,
+    wrap_and_jit,
+    make_python_wrapper,
+    make_property,
+    make_function,
+    overload_methods,
+    make_constructor,
+)
+
+from numba_extras.jitclass.boxing import define_boxing
+
+import numba
+from numba.core.extending import overload, overload_method
+
 # using ABCMeta as Meta for class inherited from type results in error:
 # TypeError: descriptor '__subclasses__' of 'type' object needs an argument
 
@@ -163,7 +211,7 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
         return type.__new__(cls, f'{name}MetaType', (StructRefProxyMeta, ), dct)
 
     def __init__(self, name, dct):
-        self.__original_name = name
+        self._original_name = name
         return super().__init__(f'{name}MetaType', (StructRefProxyMeta, ), dct)
 
     def _reduce_states(self):
@@ -172,8 +220,8 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
 
     @classmethod
     def _rebuild(cls, class_info):
-        proxy_meta = meta_from_class_info(class_info)
         # import pdb; pdb.set_trace()
+        proxy_meta = meta_from_class_info(class_info)
         # proxy_cls = from_class_info(class_info)
         return proxy_meta
 
@@ -185,11 +233,11 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
 
     def __box__(self, ty, mi):
         # instance = self.create({})
-        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
         if ty not in self.__cache:
-            self.__cache[ty] = type.__new__(self, self.__original_name, (StructRefProxy,), self.members)
+            self.__cache[ty] = type.__new__(self, self._original_name, (StructRefProxy,), self.members)
 
-        # instance = type.__new__(self, self.__original_name, (StructRefProxy,), self.members)
+        # instance = type.__new__(self, self._original_name, (StructRefProxy,), self.members)
         instance = self.__cache[ty]
 
         instance._type = ty
@@ -215,6 +263,7 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
         # instance = super().__call__(*args, **kwargs)
         # instance = super().__call__(name, (StructRefProxy,), members)
         self.members = members
+        import pdb; pdb.set_trace()
         instance = self.ctor(self, name, (StructRefProxy,), members)
         # type.__init__(instance, name, (StructRefProxy,), members)
         StructRefProxyMeta.__init__(instance, name, (StructRefProxy,), members)
@@ -234,7 +283,340 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
     def create(self, members):
         # return type.__new__(self, self.__name__, (StructRefProxy,), members)
         # return self(self.__name__, (StructRefProxy,), members)
-        return self(self.__original_name, members)
+        return self(self._original_name, members)
+
+    @staticmethod
+    def extract_members(cls, params):
+        members = params.members
+
+        if not members:
+            members = get_annotated_members(cls)
+
+        methods = get_methods(cls)
+        if "__init__" not in methods:
+            methods["__init__"] = lambda self: None
+
+        if "__new__" in methods:
+            new = methods["__new__"]
+            if new is Generic.__new__ or new is object.__new__:
+                del methods["__new__"]
+
+        if "__new__" in methods:
+            raise NotImplementedError('User defined __new__ is not supported')
+
+        return members, methods
+
+    def make_ref_cls(self, cls, mapped_parameters, class_info):
+        members = self._orig_members
+        resolved_methods = self._orig_methods
+
+        resolved_members = resolve_members(members, mapped_parameters)
+        if len(mapped_parameters):
+            resolved_methods = {name: resolve_function_typevars(method, mapped_parameters) for name, method in resolved_methods.items()}
+
+        ref_type = SerializableStructRef.create_(f'{self._original_name}_Ref', class_info)
+        ref_cls = ref_type(resolved_members)
+
+        for name, method in resolved_methods.items():
+            overload_method(ref_type, name, strict=False)(lambda *args, **kwargs: method)
+
+        resolved_methods = {name: njit(method) for name, method in resolved_methods.items()}
+        properties = {member_name: make_property(cls.__name__, member_name) for member_name in members.keys()}
+
+        instance_ctor = njit(make_constructor(resolved_methods.get('__init__'), ref_cls))
+
+        all_members = {**resolved_methods, **properties}
+        all_members.update({'__new__': lambda cls, *args, **kwargs: instance_ctor(*args, **kwargs)})
+
+        return ref_cls, all_members
+
+
+class StructRefProxyMetaType(SerializableStructRefProxyMetaType):
+    def __new__(cls, cls_, params):
+        class_info = {class_info_attr: ClassInfo(cls_, params)}
+        return super().__new__(cls, cls_.__name__, class_info)
+
+    def __init__(self, cls, params):
+        class_info = getattr(self, class_info_attr)
+        super().__init__(cls.__name__, {class_info_attr: class_info})
+
+        members, methods = self.extract_members(cls, params)
+        self._instance = None
+        self._orig_members = members
+        self._orig_methods = methods
+
+        ref_meta = SerializableStructRef.create(f'{self.__name__}_Ref', self)
+        self.ref_meta = ref_meta([])
+
+        define_boxing(ref_meta, self)
+
+        meta_ctor = njit(make_constructor(None, self.ref_meta))
+        self.ctor = lambda *args, **kwargs: meta_ctor()
+
+        ref_cls, all_members = self.make_ref_cls(cls, {}, class_info)
+
+        self.ref_cls = ref_cls
+        self._members = all_members
+        self.__class_members = {}
+
+    def get_instance(self):
+        if self._instance is None:
+            self._instance = type.__new__(self, self._original_name, (StructRefProxy,), self._members)
+
+        return self._instance
+
+    def __box__(self, ty, mi):
+        instance = self.get_instance()
+        instance._type = ty
+        instance._meminfo = mi
+        instance._numba_type_ = ty
+
+        return instance
+
+    def __call__(self):
+        instance = super().__call__(self._original_name, self._members)
+        SerializableStructRef.bind(type(self.ref_cls), instance)
+
+        define_boxing(type(self.ref_cls), instance)
+
+        return instance
+
+
+class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
+    def __new__(cls, cls_, params, template_params):
+        class_info = {class_info_attr: ClassInfo(cls_, params)}
+        return super().__new__(cls, f'{cls_.__name__}GenericAlias', class_info)
+
+    def __init__(self, cls, params, template_params):
+        self._template_params = template_params
+        class_info = getattr(self, class_info_attr)
+        super().__init__(f'{cls.__name__}GenericAlias', {class_info_attr: class_info})
+
+        members, methods = self.extract_members(cls, params)
+        self._instance = None
+        self._orig_members = members
+        self._orig_methods = methods
+
+        ref_meta = SerializableStructRef.create(f'{self.__name__}_GenericAliasRef', self)
+        self.ref_meta = ref_meta([])
+
+        define_boxing(ref_meta, self)
+
+        meta_ctor = njit(make_constructor(None, self.ref_meta))
+        self.ctor = lambda *args, **kwargs: meta_ctor()
+
+        mapped_parameters = {param: typ for param, typ in zip(cls.__parameters__, template_params)}
+
+        ref_cls, all_members = self.make_ref_cls(cls, mapped_parameters, class_info)
+
+        self.ref_cls = ref_cls
+        self._members = all_members
+        self.__class_members = {}
+
+    def get_instance(self):
+        if self._instance is None:
+            self._instance = type.__new__(self, self._original_name, (StructRefProxy,), self._members)
+
+        return self._instance
+
+    def __box__(self, ty, mi):
+        instance = self.get_instance()
+        instance._type = ty
+        instance._meminfo = mi
+        instance._numba_type_ = ty
+
+        return instance
+
+    def __call__(self):
+        import pdb; pdb.set_trace()
+        instance = super().__call__(self._original_name, self._members)
+        SerializableStructRef.bind(type(self.ref_cls), instance)
+
+        define_boxing(type(self.ref_cls), instance)
+
+        return instance
+
+
+class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
+    def __new__(cls, cls_, params):
+        class_info = {class_info_attr: ClassInfo(cls_, params), '__call__': cls.instance_call, '__getitem__': cls.instance_getitem}
+        return super().__new__(cls, f'{cls_.__name__}Generic', class_info)
+
+    def __init__(self, cls, params):
+        class_info = getattr(self, class_info_attr)
+        super().__init__(f'{cls.__name__}Generic', {class_info_attr: class_info, '__call__': self.instance_call, '__getitem__': self.instance_getitem})
+
+        members, methods = self.extract_members(cls, params)
+        self._instance = None
+        # self._orig_members = members
+        self._orig_members = {}
+        # self._orig_methods = methods
+        self._orig_methods = {}
+
+        ref_meta = SerializableStructRef.create(f'{self.__name__}_GenericRef', self)
+        self.ref_meta = ref_meta([])
+
+        define_boxing(ref_meta, self)
+
+        meta_ctor = njit(make_constructor(None, self.ref_meta))
+        self.ctor = lambda *args, **kwargs: meta_ctor()
+
+        ref_cls, all_members = self.make_ref_cls(cls, {}, class_info)
+
+        self.ref_cls = ref_cls
+        self._members = all_members
+        import pdb; pdb.set_trace()
+        self.cls = cls
+        self.params = params
+        # self.__class_members = {}
+        # self._members = {}
+
+    def get_instance(self):
+        if self._instance is None:
+            self._instance = type.__new__(self, self._original_name, (StructRefProxy,), self._members)
+
+        return self._instance
+
+    def __box__(self, ty, mi):
+        instance = self.get_instance()
+        instance._type = ty
+        instance._meminfo = mi
+        instance._numba_type_ = ty
+
+        return instance
+
+    def __call__(self):
+        instance = super().__call__(self._original_name, self._members)
+        SerializableStructRef.bind(type(self.ref_cls), instance)
+
+        define_boxing(type(self.ref_cls), instance)
+
+        return instance
+
+    @staticmethod
+    def instance_call(self, *args, **kwargs):
+        raise RuntimeError
+
+    @staticmethod
+    def instance_getitem(self, args):
+        if not isinstance(args, tuple):
+            args = (args,)
+        meta = GenericAliasStructRefProxyMetaType(self.cls, self.params, args)
+
+        typ = meta()
+
+        return _GenericAlias(typ, args)
+
+
+# class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
+#     @staticmethod
+#     def extract_members(cls, params):
+#         members = params.members
+
+#         if not members:
+#             members = get_annotated_members(cls)
+
+#         methods = get_methods(cls)
+#         if "__init__" not in methods:
+#             methods["__init__"] = lambda self: None
+
+#         if "__new__" in methods:
+#             new = methods["__new__"]
+#             if new is Generic.__new__ or new is object.__new__:
+#                 del methods["__new__"]
+
+#         if "__new__" in methods:
+#             raise NotImplementedError('Non-default __new__ is not supported')
+
+#         return members, methods
+
+#     def __new__(cls, cls_, params):
+#         class_info = {class_info_attr: ClassInfo(cls_, params)}
+#         return super().__new__(cls, cls_.__name__, class_info)
+
+#     def __init__(self, cls, params):
+#         class_info = getattr(self, class_info_attr)
+#         super().__init__(cls.__name__, {class_info_attr: class_info})
+
+#         members, methods = self.extract_members(cls, params)
+#         self.__instance = None
+#         self._orig_members = members
+#         self._orig_methods = methods
+
+#         ref_meta = SerializableStructRef.create(f'{self.__name__}_Ref', self)
+#         self.ref_meta = ref_meta([])
+
+#         define_boxing(ref_meta, self)
+
+#         meta_ctor = njit(make_constructor(None, self.ref_meta))
+#         self.ctor = lambda *args, **kwargs: meta_ctor()
+
+#         properties = {member_name: make_property(cls.__name__, member_name) for member_name in members.keys()}
+#         all_members = {**methods, **properties}
+#         resolved_members = resolve_members(members, {})
+
+#         ref_cls = SerializableStructRef.create_(f'{self._original_name}_Ref', class_info)
+#         self.ref_cls = ref_cls(resolved_members)
+#         instance_ctor = njit(make_constructor(methods['__init__'], self.ref_cls))
+
+#         all_members.update({'__new__': lambda cls, *args, **kwargs: instance_ctor(*args, **kwargs)})
+
+#         self.__members = all_members
+#         self.__class_members = {}
+
+#     def get_instance(self):
+#         if self.__instance is None:
+#             self.__instance = type.__new__(self, self._original_name, (StructRefProxy,), self.__members)
+
+#         return self.__instance
+
+#     def __box__(self, ty, mi):
+#         instance = self.get_instance()
+#         instance._type = ty
+#         instance._meminfo = mi
+#         instance._numba_type_ = ty
+
+#         return instance
+
+#     def __call__(self):
+#         # import pdb; pdb.set_trace()
+#         instance = super().__call__(self._original_name, self.__members)
+#         SerializableStructRef.bind(type(self.ref_cls), instance)
+
+#         define_boxing(type(self.ref_cls), instance)
+
+#         return instance
+
+#     def _specificize_impl(args):
+#         mapped_parameters = {param: typ for param, typ in zip(self.__parameters, args)}
+#         members_list = resolve_members(self.__orig_members, mapped_parameters)
+#         methods = {name: resolve_function_typevars}
+#         ref_cls = SerializableStructRef.create_(f'{self._original_name}_Ref', class_info)
+
+#     def specificize(self, args: List[Type]):
+#         if len(args) != len(self.parameters):
+#             msg = f"Wrong number of args. "
+#             msg += f"Expected {len(self.parameters)}({self.parameters})."
+#             msg += f"Got {len(args)}({args})"
+
+#             raise RuntimeError(msg)
+
+#         _args = tuple(args)
+#         specificized = self.specificized.get(_args)
+
+#         if not specificized:
+#             specificized = self._specificize_impl(_args)
+#             self.specificized[_args] = specificized
+
+#         return specificized
+
+#     def getitem_impl(self, *args):
+
+
+#     def __getitem__(self, *args):
+#         @njit
+#         def getitem(self, *args):
+#             return self[args]
 
 
 class StructRefProxySerializer(ReduceMixin):
@@ -251,64 +633,6 @@ class StructRefProxySerializer(ReduceMixin):
     def _reduce_class(self):
         return StructRefProxySerializer
 
-
-# class SerializableStructRefProxyMeta(ReduceMixin, StructRefProxyMeta):
-#     def _reduce_states(self):
-#         return {"class_info": getattr(self, class_info_attr)}
-
-#     @classmethod
-#     def _rebuild(cls, class_info):
-#         proxy_cls = from_class_info(class_info)
-#         return proxy_cls
-
-#     def _reduce_class(self):
-#         return SerializableStructRefProxyMeta
-
-
-# this class implements type constructor, which is called in boxing procedure.
-# it ables to restore generated class from class_info
-# class SerializableBoxing(ReduceMixin):
-#     def __init__(self, cls):
-#         self.cls = cls
-
-#     def __call__(self, ty, mi):
-#         instance = super().__new__(self.cls)
-#         instance._type = ty
-#         instance._meminfo = mi
-
-#         return instance
-
-#     def _reduce_states(self):
-#         cls = self.cls
-#         return {"class_info": getattr(cls, class_info_attr)}
-
-#     @classmethod
-#     def _rebuild(cls, class_info: "ClassInfo"):
-#         proxy_cls = from_class_info(class_info)
-#         return cls(proxy_cls)
-
-
-# The same as StructRefProxy, but with ability to be pickled/unpickled when created dynamically
-# class SerializableStructRefProxy(ReduceMixin, structref.StructRefProxy):
-#     def _reduce_states(self):
-#         import pdb; pdb.set_trace()
-#         return {'class_info': getattr(self, class_info_attr),
-#                 'state': self.__dict__}
-
-#     @classmethod
-#     def _rebuild(cls, class_info, state):
-#         proxy_cls = from_class_info(class_info)
-#         # if not proxy_cls in cls.__cache:
-#         #     raise RuntimeError('something went wrong')
-
-#         # ref_class = cls.__cache[proxy_cls]
-#         # instance = ref_class.__new__(ref_class)
-#         proxy_cls.__dict__.update(state)
-
-#         return proxy_cls
-
-#     def _reduce_class(self):
-#         return SerializableStructRefProxy
 
 # The same as StructRef, but with ability to be pickled/unpickled when created dynamically
 class SerializableStructRef(ReduceMixin, types.StructRef):
@@ -348,13 +672,14 @@ class SerializableStructRef(ReduceMixin, types.StructRef):
 
     @classmethod
     def bind(cls, ref_cls, proxy_cls):
+        import pdb; pdb.set_trace()
         assert proxy_cls not in cls.__cache
         cls.__cache[proxy_cls] = ref_cls
         ref_cls.__proxy_cls__ = proxy_cls
         # ref_cls.instance_type = ref_cls
 
     @classmethod
-    def create(cls, name, proxy_cls, call):
+    def create(cls, name, proxy_cls, call = None):
         # import pdb; pdb.set_trace()
         cls_info = getattr(proxy_cls, class_info_attr)
         ref_cls = type(name, (cls,), {class_info_attr: cls_info})
@@ -364,35 +689,9 @@ class SerializableStructRef(ReduceMixin, types.StructRef):
 
         return ref_cls
 
-    # def __getattr__(self, name):
-    #     # import pdb; pdb.set_trace()
-    #     print('__getattr__', name)
-    #     if name == 'instance_type' or name == '_code':
-    #         import pdb; pdb.set_trace()
-    #         print(name)
-    #         return None
+    @classmethod
+    def create_(cls, name, class_info):
+        ref_cls = type(name, (cls,), {class_info_attr: class_info})
+        ref_cls = structref.register(ref_cls)
 
-    #     return super().__getattr__(name)
-
-
-# class meta_A:
-
-
-# @jitclass
-# class A(metaclass=meta_A):
-#     # class_member: int
-#     ...
-
-# type(A) == meta_A
-
-# A_proxy - python
-# A_ref - StructRef
-
-# meta_A_proxy = Python
-# meta_A_ref - StructRef
-
-# ls = typedList.empty_list(A_ref)
-
-# @njit
-# def foo(A):
-#     a = A()
+        return ref_cls

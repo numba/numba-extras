@@ -59,7 +59,9 @@ from numba_extras.jitclass.serialization_utils import (
     SerializableStructRefProxyMetaType,
     SerializableBoxing,
     SerializableStructRef,
-    StructRefProxy
+    StructRefProxy,
+    StructRefProxyMetaType,
+    GenericStructRefProxyMetaType
 )
 from numba_extras.jitclass.class_descriptor import ClassDescriptor
 from numba_extras.jitclass.common import _Params
@@ -155,18 +157,46 @@ class jitclass:
 
         self.params = _Params(compile_methods, jitclass, members)
 
+    @staticmethod
+    def __make_proxy_class_meta__(
+        cls: Type, params: _Params
+    ):
+        proxy_meta = StructRefProxyMetaType(cls, params)
+        # jitclass.__meta_cache[cls] = proxy_meta
+
+        @overload(proxy_meta)
+        def meta_ovld():
+            def impl():
+                return None
+
+            return impl
+
+        return proxy_meta
+
     def __call__(self, cls: Type) -> Type:
         # import pdb; pdb.set_trace()
         if cls in self.__cache:
             return self.__cache[cls]
 
         if not issubclass(cls, typing.Generic):
-            pass
+            meta = self.__make_proxy_class_meta__(cls, self.params)
+            jitclass.__meta_cache[cls] = meta
+            proxy_class = meta()
+            self.__cache[cls] = proxy_class
 
-        class_descr = ClassDescriptor(self, cls, self.params)
-        proxy_type = class_descr.proxy_type
-        jitclass.__class_types[proxy_type] = class_descr
-        jitclass.__class_types[cls] = class_descr
+            return proxy_class
+        else:
+            meta = GenericStructRefProxyMetaType(cls, self.params)
+            jitclass.__meta_cache[cls] = meta
+            proxy_class = meta()
+            self.__cache[cls] = proxy_class
+
+            return proxy_class
+
+        # class_descr = ClassDescriptor(self, cls, self.params)
+        # proxy_type = class_descr.proxy_type
+        # jitclass.__class_types[proxy_type] = class_descr
+        # jitclass.__class_types[cls] = class_descr
 
         # import pdb; pdb.set_trace()
 
@@ -312,26 +342,8 @@ class jitclass:
         def ctor(cls, name, bases, dct):
             return class_descr._meta_constructor(cls, name, bases, dct)
 
-        # def __init__(self, name, bases, dct):
-        #     return super().__init__(name, bases, dct)
+        proxy_meta = SerializableStructRefProxyMetaType(name, {**class_info, 'ctor': ctor})
 
-        proxy_meta = SerializableStructRefProxyMetaType(
-            name,
-            # (StructRefProxyMeta,),
-            # {**class_info, '__new__': lambda cls, *args, **kwargs: class_descr._meta_constructor(cls, *args, **kwargs)}
-            # {**class_info, '__new__': __new__, '__init__': __init__}
-            {**class_info, 'ctor': ctor}
-        )
-        # proxy_meta = ptypes.new_class(
-        #     name,
-        #     (StructRefProxyMeta,),
-        #     {"metaclass": SerializableStructRefProxyMetaType},
-        #     # lambda ns: ns.update({**class_info, '__new__': lambda cls, *args, **kwargs: class_descr._meta_constructor(cls, *args, **kwargs)})
-        #     lambda ns: ns.update(**class_info)
-        #     # lambda ns: ns.update(members),
-        # )
-
-        # import pdb; pdb.set_trace()
         jitclass.__meta_cache[cls] = proxy_meta
 
         @overload(proxy_meta)

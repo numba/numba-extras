@@ -22,7 +22,7 @@ import weakref
 
 from numba_extras.jitclass.typemap import python_numba_type_map, PType
 # from numba_extras.jitclass.serialization_utils import SerializableStructRefProxyMeta
-from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
+# from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
 import numba
 from numba.core.types.functions import Function
 from numba.core.types import Type as NType
@@ -32,7 +32,7 @@ from numba.core.serialize import ReduceMixin
 TypeOrGeneric = Union[Type, "_GenericAlias"]
 TypeOrTuple = Union[TypeOrGeneric, Tuple[TypeOrGeneric, ...]]
 MappedParameters = Dict[TypeVar, TypeOrGeneric]
-MemberType = Union[TypeOrGeneric, TypeVar]
+MemberType = Union[TypeOrGeneric, TypeVar, str]
 MembersDict = Dict[str, MemberType]
 MethodsDict = Dict[str, Callable]
 ResolvedMembersList = List[Tuple[str, NType]]
@@ -125,6 +125,7 @@ class _GenericAlias(ReduceMixin):
 
     @classmethod
     def _rebuild(cls, wrapee, params):
+        from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
         # wrapee = SerializableStructRefProxyMeta._rebuild(**wrapee)
         wrapee = StructRefProxySerializer._rebuild(**wrapee)
 
@@ -199,6 +200,9 @@ def get_class(func: Union[Function, numba.core.types.functions.Dispatcher]) -> O
 def resolve_type(typ: MemberType, parameters: MappedParameters) -> NType:
     args = []
     if isinstance(typ, TypeVar):
+        typ = parameters[typ]
+
+    if isinstance(typ, str):
         typ = parameters[typ]
 
     # import pdb; pdb.set_trace()
