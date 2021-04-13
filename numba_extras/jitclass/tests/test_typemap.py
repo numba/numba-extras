@@ -11,8 +11,12 @@ import itertools
 from tutils import raises_with_msg
 
 
-params_count_mismatch_msg = re.compile(r".+ takes exactly [0-9]+ arguments\. [0-9]+ provided: \[.*\]")
-params_type_mismatch_msg = re.compile(r"Can't construct Numba type with non-Numba type parameter .+")
+params_count_mismatch_msg = re.compile(
+    r".+ takes exactly [0-9]+ arguments\. [0-9]+ provided: \[.*\]"
+)
+params_type_mismatch_msg = re.compile(
+    r"Can't construct Numba type with non-Numba type parameter .+"
+)
 
 trivial_python_types = [float, int, str]
 trivial_numba_types = [float64, int64, unicode_type]
@@ -30,7 +34,9 @@ def test_map_add():
 
 
 def test_map_add_already_existed():
-    msg = re.compile(r"Can't add new constructor for type .+\. Constructor alredy exists")
+    msg = re.compile(
+        r"Can't add new constructor for type .+\. Constructor alredy exists"
+    )
 
     with raises_with_msg(RuntimeError, msg):
         typemap.python_numba_type_map.add(int, lambda args: int64)
@@ -40,7 +46,9 @@ def test_map_construct_unknown():
     class _int8:
         pass
 
-    msg = re.compile(r"Can't construct Numba equivalent for type .+\. No known constructors")
+    msg = re.compile(
+        r"Can't construct Numba equivalent for type .+\. No known constructors"
+    )
 
     with raises_with_msg(RuntimeError, msg):
         constructed = typemap.python_numba_type_map.construct(_int8, [])

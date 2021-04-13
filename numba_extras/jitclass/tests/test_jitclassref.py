@@ -25,6 +25,7 @@ T0 = TypeVar("T0")
 T1 = TypeVar("T1")
 T2 = TypeVar("T1")
 
+
 class TrivialSingleMember:
     a: int
 
@@ -208,8 +209,12 @@ def test_single_member_operators_python_jit():
                 nj_result = njit(op)(j_instance)
                 i_result = op(i_instance)
 
-                assert i_result == j_result, f"operator {name} failed for type {interpreted[typ]}"
-                assert i_result == nj_result, f"operator {name} failed for type {interpreted[typ]}"
+                assert (
+                    i_result == j_result
+                ), f"operator {name} failed for type {interpreted[typ]}"
+                assert (
+                    i_result == nj_result
+                ), f"operator {name} failed for type {interpreted[typ]}"
 
     numeric_cases = {int: lambda x: x(10), float: lambda x: x(10.0)}
 
@@ -275,7 +280,10 @@ def test_multiple_members_python():
 
     cases = [
         ((int, float, str), lambda x: x(10, 10.0, "10")),
-        ((js[int], js[float], js[str]), lambda x: x(js[int](10), js[float](10.0), js[str]("10")),),
+        (
+            (js[int], js[float], js[str]),
+            lambda x: x(js[int](10), js[float](10.0), js[str]("10")),
+        ),
     ]
 
     for types, init in cases:
@@ -406,6 +414,7 @@ def test_single_member_overload():
     with raises_with_msg(TypingError, msg):
         ji_str.plus_minus_2()
 
+
 def test_trivial_single_member():
     jitted = jitclass(TrivialSingleMember)
     interpreted = TrivialSingleMember
@@ -414,6 +423,7 @@ def test_trivial_single_member():
     ii = interpreted(10)
 
     assert ii == ji
+
 
 def test_trivial_single_member_jit():
     jitted = jitclass(TrivialSingleMember)
@@ -430,7 +440,9 @@ def test_trivial_single_member_jit():
 
     assert ii == ji
 
+
 # call = TrivialSingleMember.__call__
+
 
 def test_callable():
     jitted = jitclass(TrivialSingleMember)
@@ -443,10 +455,13 @@ def test_callable():
 
     test()
 
+
 def test_generic():
     jitted = jitclass(SingleMember)
 
     jitted[int]
+
+
 # def test_pass_type():
 #     jitted = jitclass(TrivialSingleMember)
 #     # tj = type(jitted)

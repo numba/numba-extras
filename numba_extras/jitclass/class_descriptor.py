@@ -45,6 +45,7 @@ from numba_extras.jitclass.overload_utils import (
 from numba_extras.jitclass.boxing import define_boxing
 from numba_extras.jitclass.common import _Params
 
+
 class ClassDescriptor:
     init: Callable
     ref_type: Type
@@ -73,21 +74,27 @@ class ClassDescriptor:
                 del methods["__new__"]
 
         if "__new__" in methods:
-            raise NotImplementedError('Custom __new__ is not supported')
+            raise NotImplementedError("Custom __new__ is not supported")
 
         wrapped_methods = wrap_and_jit(methods)
         parameters = get_parameters(cls)
         name = cls.__name__
 
         # self is not properly initialized yet. Anything except capturing may result in wierd things
-        ref_meta, proxy_meta = jitclass.make_ref_and_proxy_metas(name, cls, wrapped_methods, members, params, methods, self)
+        ref_meta, proxy_meta = jitclass.make_ref_and_proxy_metas(
+            name, cls, wrapped_methods, members, params, methods, self
+        )
         define_boxing(ref_meta, proxy_meta)
 
         from numba.core import cgutils
+
         ref_meta_inst = ref_meta({})
+
         @lower_constant(ref_meta_inst)
         def lower(context, builder, ty, pyval):
-            import pdb; pdb.set_trace()
+            import pdb
+
+            pdb.set_trace()
             obj = cgutils.create_struct_proxy(typ)(context, builder)
             return obj._getvalue()
 
@@ -97,7 +104,9 @@ class ClassDescriptor:
         self._meta_ctor = lambda cls, *args, **kwargs: meta_ctor()
         # self.init = None
 
-        ref_cls, proxy_cls = jitclass.make_ref_and_proxy_types(name, cls, wrapped_methods, members, params, methods, proxy_meta, self)
+        ref_cls, proxy_cls = jitclass.make_ref_and_proxy_types(
+            name, cls, wrapped_methods, members, params, methods, proxy_meta, self
+        )
 
         define_boxing(ref_cls, proxy_cls)
         # TODO more args to 'init'
@@ -112,30 +121,41 @@ class ClassDescriptor:
         self.specificized = {}
 
         if len(parameters) > 0:
-            overload(proxy_cls)(make_function("init", "self", "raise NotImplementedError('Not implemented')", {}))
+            overload(proxy_cls)(
+                make_function(
+                    "init", "self", "raise NotImplementedError('Not implemented')", {}
+                )
+            )
         else:
             ctor = self.specificize([])
             typ = ctor.__numba_class_type__
-            # ovld = make_overload(methods['__call__'])
-            # overload(typ)(ovld)
             from numba.core.imputils import lower_builtin
 
             from numba.core.typing.templates import builtin_registry
 
-            # import pdb; pdb.set_trace()
             def get(glbls, func):
                 for key, value in glbls:
                     if key == func:
                         return value
 
                 return None
-            ref_cls.__numba_call_impl__ = get(builtin_registry.globals, methods['__call__'])
 
-            overload(proxy_cls, strict=False)(make_function("init", "*args, **kwargs", "return ctor", {'ctor': ctor.__original_func__}))
+            ref_cls.__numba_call_impl__ = get(
+                builtin_registry.globals, methods["__call__"]
+            )
+
+            overload(proxy_cls, strict=False)(
+                make_function(
+                    "init",
+                    "*args, **kwargs",
+                    "return ctor",
+                    {"ctor": ctor.__original_func__},
+                )
+            )
 
         overload_methods(methods, ref_cls)
 
-        if '__call__' in methods:
+        if "__call__" in methods:
             from numba.core.typing.templates import builtin_registry
 
             def get(glbls, func):
@@ -145,8 +165,11 @@ class ClassDescriptor:
 
                 return None
 
-            ref_cls.__numba_call_impl__ = get(builtin_registry.globals, methods['__call__'])
+            ref_cls.__numba_call_impl__ = get(
+                builtin_registry.globals, methods["__call__"]
+            )
             from numba.core import utils
+
             def _get_signature(ovld, typingctx, fnty, args, kws):
                 sig = fnty.get_call_type(typingctx, args, kws)
                 sig = sig.replace(pysig=utils.pysignature(ovld))
@@ -161,14 +184,13 @@ class ClassDescriptor:
                 sig = _get_signature(func, typing_context, fnty, sig.args, {})
                 call = context.get_function(fnty, sig)
                 # Link dependent library
-                context.add_linking_libs(getattr(call, 'libs', ()))
+                context.add_linking_libs(getattr(call, "libs", ()))
                 return call(builder, args)
 
         if "__len__" in methods:
             ref_cls.__numba_len_impl__ = methods["__len__"]
 
         self.__add_type_mapping(cls, proxy_cls)
-
 
     def __add_type_mapping(self, cls, proxy_cls):
         def construct(args):
@@ -180,6 +202,7 @@ class ClassDescriptor:
         python_numba_type_map.add(proxy_cls, construct)
 
         if len(self.parameters) > 0:
+
             @overload(cls)
             def _ovl():
                 def impl():
@@ -187,11 +210,18 @@ class ClassDescriptor:
                     pass
 
                 return impl
+
         else:
             ctor = self.specificize([])
-            overload(cls, strict=False)(make_function("init", "*args", "return ctor", {'ctor': ctor.__original_func__}))
+            overload(cls, strict=False)(
+                make_function(
+                    "init", "*args", "return ctor", {"ctor": ctor.__original_func__}
+                )
+            )
 
-    def __resolve_members(self, mapped_parameters: MappedParameters) -> ResolvedMembersList:
+    def __resolve_members(
+        self, mapped_parameters: MappedParameters
+    ) -> ResolvedMembersList:
         return resolve_members(self.members, mapped_parameters)
 
     def __map_parameters(self, args: Tuple[Type, ...]) -> MappedParameters:
@@ -201,7 +231,6 @@ class ClassDescriptor:
         return {var.__name__: typ for var, typ in mapped_parameters.items()}
 
     def __make_constructor(self, struct_type: types.StructRef) -> Callable:
-        # import pdb; pdb.set_trace()
         ctor = make_constructor(self.init, struct_type)
         ctor_impl = njit(ctor)
         ctor_impl.__numba_class_type__ = struct_type
@@ -209,24 +238,14 @@ class ClassDescriptor:
 
         return ctor_impl
 
-    def __specificize_type(self, args: Tuple[Type, ...]) -> Tuple[NType, MappedParameters]:
+    def __specificize_type(
+        self, args: Tuple[Type, ...]
+    ) -> Tuple[NType, MappedParameters]:
         mapped_parameters = self.__map_parameters(args)
         members = self.__resolve_members(mapped_parameters)
         struct_type = self.ref_type(members)
         struct_type.mapped_parameters = self.__name_to_type_mapping(mapped_parameters)
         self.proxy_type._type.instance_type = struct_type
-
-        # def instance_type():
-        #     import pdb; pdb.set_trace()
-
-        #     return struct_type
-        # struct_type.instance_type = struct_type
-        # struct_type.instance_type = lambda: None
-        # import pdb; pdb.set_trace()
-        # try:
-        #     print(struct_type.instance_type)
-        # except:
-        #     pass
 
         return struct_type
 

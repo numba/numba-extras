@@ -70,7 +70,9 @@ def make_python_wrapper(func):
 
     func_glbls = {func_name: func}
 
-    return make_function(f"{func_name}_wrapper", args_str, f"return {func_name}({frwd_args})", func_glbls)
+    return make_function(
+        f"{func_name}_wrapper", args_str, f"return {func_name}({frwd_args})", func_glbls
+    )
 
 
 def wrap_and_jit(methods):
@@ -87,7 +89,11 @@ def wrap_and_jit(methods):
 
 
 def make_function(
-    name: str, sig: SigOrStr, body: str, glbls: Optional[Dict] = None, prefix: str = " " * 4,
+    name: str,
+    sig: SigOrStr,
+    body: str,
+    glbls: Optional[Dict] = None,
+    prefix: str = " " * 4,
 ) -> Callable:
     if glbls is None:
         glbls = {}
@@ -122,8 +128,6 @@ def _make_overload(method):
 def _wrap_overload(method):
     sig_str = sig_to_str(inspect.signature(method))
     frwd_args = ",".join(sig_to_args(sig_str))
-
-    # impl = resolve_function_typevars(method, parameters)
 
     overload_impl = make_function(
         method.__name__ + "ovld",
@@ -169,7 +173,9 @@ def overload_methods(methods, struct_type):
         overload(method)(overload_impl)  # to call from python wrapper
 
         # to call from jit-region
-        if (name.startswith("__") and name.endswith("__")) and name[2:-2] in operator.__all__:
+        if (name.startswith("__") and name.endswith("__")) and name[
+            2:-2
+        ] in operator.__all__:
             overload(getattr(operator, name))(overload_impl)
         else:
             overload_method(struct_type, name)(overload_impl)
@@ -179,7 +185,9 @@ def overload_methods(methods, struct_type):
 @overload(len)
 def len_ovld(self):
     try:
-        return resolve_function_typevars(self.__numba_len_impl__, self.mapped_parameters)
+        return resolve_function_typevars(
+            self.__numba_len_impl__, self.mapped_parameters
+        )
     except:
         pass
 
@@ -220,6 +228,8 @@ def make_property(class_name, member_name):
     set_name = f"{class_name}_set_{member_name}"
 
     get_jit = njit(make_function(get_name, "self", f"return self.{member_name}", {}))
-    set_jit = njit(make_function(set_name, "self, value", f"self.{member_name} = value", {}))
+    set_jit = njit(
+        make_function(set_name, "self, value", f"self.{member_name} = value", {})
+    )
 
     return property(get_jit).setter(set_jit)

@@ -19,13 +19,17 @@ class _PythonNumbaTypeMap:
 
     def add(self, typ: PType, constructor: Constructor) -> None:
         if typ in self.map:
-            raise RuntimeError(f"Can't add new constructor for type {typ}. Constructor alredy exists")
+            raise RuntimeError(
+                f"Can't add new constructor for type {typ}. Constructor alredy exists"
+            )
 
         self.map[typ] = constructor
 
     def construct(self, typ: PType, args: List[NType]) -> NType:
         if typ not in self.map:
-            raise RuntimeError(f"Can't construct Numba equivalent for type {typ}. No known constructors")
+            raise RuntimeError(
+                f"Can't construct Numba equivalent for type {typ}. No known constructors"
+            )
 
         return self.map[typ](args)
 
@@ -36,14 +40,18 @@ class _PythonNumbaTypeMap:
 def _check_arguments(func_name: str, expected: int, args: List[NType]):
     actual = len(args)
     if actual != expected:
-        raise RuntimeError(f"{func_name} takes exactly {expected} arguments. {actual} provided: {args}")
+        raise RuntimeError(
+            f"{func_name} takes exactly {expected} arguments. {actual} provided: {args}"
+        )
 
 
 def _check_type(typs):
     for typ in typs:
         # import pdb; pdb.set_trace()
         if not isinstance(typ, NType):
-            raise RuntimeError(f"Can't construct Numba type with non-Numba type parameter {typ}")
+            raise RuntimeError(
+                f"Can't construct Numba type with non-Numba type parameter {typ}"
+            )
 
 
 def _int_constructor(args: List[NType]) -> NType:
@@ -75,7 +83,9 @@ def _dict_constructor(args: List[NType]) -> NType:
 
 def _tuple_constructor(args: List[NType]) -> NType:
     if len(args) == 0:
-        raise RuntimeError("At least one argument should be provided to _tuple_constructor. 0 provided")
+        raise RuntimeError(
+            "At least one argument should be provided to _tuple_constructor. 0 provided"
+        )
 
     _check_type(args)
     return types.containers.Tuple(args)

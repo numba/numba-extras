@@ -21,6 +21,7 @@ import copy
 import weakref
 
 from numba_extras.jitclass.typemap import python_numba_type_map, PType
+
 # from numba_extras.jitclass.serialization_utils import SerializableStructRefProxyMeta
 # from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
 import numba
@@ -76,7 +77,9 @@ class _GenericAlias(ReduceMixin):
 
     def __call__(self, *args, **kwargs):
         # import pdb; pdb.set_trace()
-        return self.__alias.__origin__.__initialize__(self.__alias.__args__)(*args, **kwargs)
+        return self.__alias.__origin__.__initialize__(self.__alias.__args__)(
+            *args, **kwargs
+        )
 
     def __mro_entries__(self, bases):
         return self.__alias.__mro_entries__(bases)
@@ -84,7 +87,9 @@ class _GenericAlias(ReduceMixin):
     def __getattr__(self, name: str):
         if name == "_numba_type_":
             try:
-                specificized = self.__alias.__origin__.__initialize__(self.__alias.__args__)
+                specificized = self.__alias.__origin__.__initialize__(
+                    self.__alias.__args__
+                )
                 return getattr(specificized, "__numba_class_type__")
             except:
                 pass
@@ -126,6 +131,7 @@ class _GenericAlias(ReduceMixin):
     @classmethod
     def _rebuild(cls, wrapee, params):
         from numba_extras.jitclass.serialization_utils import StructRefProxySerializer
+
         # wrapee = SerializableStructRefProxyMeta._rebuild(**wrapee)
         wrapee = StructRefProxySerializer._rebuild(**wrapee)
 
@@ -147,10 +153,17 @@ def copy_function(func: FunctionType) -> FunctionType:
     return cpy
 
 
-def resolve_function_typevars(func: FunctionType, parameters: MappedParameters) -> FunctionType:
+def resolve_function_typevars(
+    func: FunctionType, parameters: MappedParameters
+) -> FunctionType:
     func = copy_function(func)
     # TODO: add to __closure__ instead
-    func.__globals__.update({var if isinstance(var, str) else var.__name__: typ for var, typ in parameters.items()})
+    func.__globals__.update(
+        {
+            var if isinstance(var, str) else var.__name__: typ
+            for var, typ in parameters.items()
+        }
+    )
 
     return func
 
@@ -172,7 +185,9 @@ def get_parameters(cls: Type) -> Tuple[TypeVar, ...]:
 # actually type and extract it.
 # for python types extracting key.
 # But for generic classes constructors we are returning function with special field set
-def get_class(func: Union[Function, numba.core.types.functions.Dispatcher]) -> Optional[Type]:
+def get_class(
+    func: Union[Function, numba.core.types.functions.Dispatcher]
+) -> Optional[Type]:
     if isinstance(func, Function):
         # TODO what if we have multiple templates defined?
         if len(func.templates) < 1:
@@ -217,7 +232,9 @@ def resolve_type(typ: MemberType, parameters: MappedParameters) -> NType:
     return python_numba_type_map.construct(typ, args)  # type: ignore
 
 
-def resolve_members(members: MembersDict, parameters: MappedParameters) -> ResolvedMembersList:
+def resolve_members(
+    members: MembersDict, parameters: MappedParameters
+) -> ResolvedMembersList:
     result = []
     for name, typ in members.items():
         result.append((name, resolve_type(typ, parameters)))
