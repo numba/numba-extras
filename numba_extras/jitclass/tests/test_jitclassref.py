@@ -459,7 +459,10 @@ def test_callable():
 def test_generic():
     jitted = jitclass(SingleMember)
 
-    jitted[int]
+    O = jitted[int]
+    o = O(10)
+    import pdb; pdb.set_trace()
+    print(o.a)
 
 
 # def test_pass_type():

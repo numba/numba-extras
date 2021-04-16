@@ -12,6 +12,7 @@ from numba.core.types import Callable
 from numba import njit
 
 from numba_extras.jitclass.typing_utils import (
+    TGenericAlias,
     _GenericAlias,
     get_annotated_members,
     get_parameters,
@@ -111,9 +112,6 @@ class SerializableBoxing(ReduceMixin):
         self.cls = cls
 
     def __call__(self, ty, mi):
-        import pdb
-
-        pdb.set_trace()
         return self.cls.__box__(ty, mi)
 
     def _reduce_states(self):
@@ -130,9 +128,6 @@ class StructRefProxyMeta(type):
     def __init__(self, name, bases, dict):
         @property
         def _numba_type_(self):
-            import pdb
-
-            pdb.set_trace()
             return self._type
 
         type.__init__(self, name, bases, dict)
@@ -146,9 +141,6 @@ class StructRefProxy:
 
         Subclasses should NOT override.
         """
-        import pdb
-
-        pdb.set_trace()
         return self._type
 
 
@@ -211,9 +203,6 @@ class SerializableStructRefProxyMetaType(ReduceMixin, StructRefProxyMeta):
 
     def __call__(self, name, members):
         self.members = members
-        import pdb
-
-        pdb.set_trace()
         instance = self.ctor(self, name, (StructRefProxy,), members)
         StructRefProxyMeta.__init__(instance, name, (StructRefProxy,), members)
 
@@ -384,14 +373,16 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         self.__class_members = {}
 
     def get_instance(self):
+        import pdb; pdb.set_trace()
         if self._instance is None:
             self._instance = type.__new__(
-                self, self._original_name, (StructRefProxy,), self._members
+                self, f"{self._original_name}GenericAliasProxy", (StructRefProxy,), self._members
             )
 
         return self._instance
 
     def __box__(self, ty, mi):
+        import pdb; pdb.set_trace()
         instance = self.get_instance()
         instance._type = ty
         instance._meminfo = mi
@@ -400,15 +391,37 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         return instance
 
     def __call__(self):
-        import pdb
-
-        pdb.set_trace()
+        # import pdb; pdb.set_trace()
         instance = super().__call__(self._original_name, self._members)
+        instance._reduce_states = GenericStructRefProxySerializer._reduce_states.__get__(
+            instance
+        )
+        instance._reduce_class = GenericStructRefProxySerializer._reduce_class.__get__(
+            instance
+        )
+        instance._rebuild = GenericStructRefProxySerializer._rebuild
+        instance.__reduce__ = GenericStructRefProxySerializer.__reduce__.__get__(instance)
         SerializableStructRef.bind(type(self.ref_cls), instance)
 
         define_boxing(type(self.ref_cls), instance)
 
         return instance
+
+    def _reduce_states(self):
+        return {"class_info": getattr(self, class_info_attr), "template_params": self._template_params}
+
+    @classmethod
+    def _rebuild(cls, class_info, template_params):
+        proxy_meta = meta_from_class_info(class_info)
+        try:
+            return proxy_meta.alias_cache[template_params]
+        except KeyError:
+            proxy_meta[template_params]
+
+            return proxy_meta.alias_cache[template_params]
+
+    def _reduce_class(self):
+        return GenericAliasStructRefProxyMetaType
 
 
 class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
@@ -450,6 +463,7 @@ class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         self._members = all_members
         self.cls = cls
         self.params = params
+        self.alias_cache = {}
 
     def get_instance(self):
         if self._instance is None:
@@ -469,6 +483,7 @@ class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
 
     def __call__(self):
         instance = super().__call__(self._original_name, self._members)
+
         SerializableStructRef.bind(type(self.ref_cls), instance)
 
         define_boxing(type(self.ref_cls), instance)
@@ -483,11 +498,17 @@ class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
     def instance_getitem(self, args):
         if not isinstance(args, tuple):
             args = (args,)
-        meta = GenericAliasStructRefProxyMetaType(self.cls, self.params, args)
+
+        try:
+            meta = self.alias_cache[args]
+        except KeyError:
+            meta = GenericAliasStructRefProxyMetaType(self.cls, self.params, args)
+            self.alias_cache[args] = meta
 
         typ = meta()
 
-        return _GenericAlias(typ, args)
+        # return _GenericAlias(typ, args)
+        return TGenericAlias(typ, args)
 
 
 class StructRefProxySerializer(ReduceMixin):
@@ -501,6 +522,26 @@ class StructRefProxySerializer(ReduceMixin):
 
     def _reduce_class(self):
         return StructRefProxySerializer
+
+
+class GenericStructRefProxySerializer(ReduceMixin):
+    def _reduce_states(self):
+        return {"class_info": getattr(self, class_info_attr), "template_params": self._template_params}
+
+    @classmethod
+    def _rebuild(cls, class_info, template_params):
+        proxy_meta = meta_from_class_info(class_info)
+        try:
+            alias = proxy_meta.alias_cache[template_params]
+        except KeyError:
+            proxy_meta[template_params]
+
+            alias = proxy_meta.alias_cache[template_params]
+
+        return alias._instance
+
+    def _reduce_class(self):
+        return GenericStructRefProxySerializer
 
 
 # The same as StructRef, but with ability to be pickled/unpickled when created dynamically
