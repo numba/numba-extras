@@ -23,6 +23,7 @@ from numba_extras.jitclass.typing_utils import (
     MethodsDict,
     ResolvedMembersList,
     NType,
+    get_class,
 )
 
 
@@ -40,6 +41,9 @@ from numba_extras.jitclass.boxing import define_boxing
 
 import numba
 from numba.core.extending import overload, overload_method
+
+from numba.core.imputils import lower_constant
+from numba.core import cgutils
 
 class_info_attr = "__numba_class_info__"
 
@@ -357,6 +361,11 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         )
         self.ref_meta = ref_meta([])
 
+        @lower_constant(self.ref_meta)
+        def lower(context, builder, ty, pyval):
+            obj = cgutils.create_struct_proxy(ty)(context, builder)
+            return obj._getvalue()
+
         define_boxing(ref_meta, self)
 
         meta_ctor = njit(make_constructor(None, self.ref_meta))
@@ -373,7 +382,6 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         self.__class_members = {}
 
     def get_instance(self):
-        import pdb; pdb.set_trace()
         if self._instance is None:
             self._instance = type.__new__(
                 self, f"{self._original_name}GenericAliasProxy", (StructRefProxy,), self._members
@@ -382,7 +390,6 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         return self._instance
 
     def __box__(self, ty, mi):
-        import pdb; pdb.set_trace()
         instance = self.get_instance()
         instance._type = ty
         instance._meminfo = mi
@@ -391,7 +398,9 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         return instance
 
     def __call__(self):
-        # import pdb; pdb.set_trace()
+        if self._instance:
+            return self._instance
+
         instance = super().__call__(self._original_name, self._members)
         instance._reduce_states = GenericStructRefProxySerializer._reduce_states.__get__(
             instance
@@ -404,6 +413,15 @@ class GenericAliasStructRefProxyMetaType(SerializableStructRefProxyMetaType):
         SerializableStructRef.bind(type(self.ref_cls), instance)
 
         define_boxing(type(self.ref_cls), instance)
+
+        @overload_method(type(self.ref_meta), '__call__', strict=False)
+        def __call__(self, a):
+            # import pdb; pdb.set_trace()
+            def impl(self, a):
+                # return instance(a)
+                return a
+
+            return impl
 
         return instance
 
@@ -454,6 +472,28 @@ class GenericStructRefProxyMetaType(SerializableStructRefProxyMetaType):
 
         define_boxing(ref_meta, self)
 
+        meta_class = self.ref_meta
+        meta_proxy = self
+        def __getitem__(self, args):
+            if self == meta_class:
+                # import pdb; pdb.set_trace()
+                if not isinstance(args, tuple):
+                    args = (args, )
+
+                args = tuple([get_class(arg) for arg in args])
+
+                alias = meta_proxy._instance[args]
+                def impl(self, args):
+                    return alias
+
+                return impl
+
+            return None
+
+        import operator
+
+        overload(operator.getitem)(__getitem__)
+        # overload_methods({'__getitem__':__getitem__}, meta_class)
         meta_ctor = njit(make_constructor(None, self.ref_meta))
         self.ctor = lambda *args, **kwargs: meta_ctor()
 

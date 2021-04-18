@@ -161,7 +161,7 @@ def test_single_member_python():
         int: lambda x: x(10),
         float: lambda x: x(10.0),
         str: lambda x: x("10"),
-        List[int]: lambda x: x(get_list()),
+        # List[int]: lambda x: x(get_list()),
     }
 
     for typ, init in cases.items():
@@ -186,7 +186,7 @@ def test_single_member_jit():
         lambda: SingleMember[int](10),
         lambda: SingleMember[float](10.0),
         lambda: SingleMember[str]("10"),
-        lambda: SingleMember[List[int]](get_list()),
+        # lambda: SingleMember[List[int]](get_list()),
     ]
 
     for init in cases:
@@ -460,9 +460,10 @@ def test_generic():
     jitted = jitclass(SingleMember)
 
     O = jitted[int]
+    jitted[int]
     o = O(10)
-    import pdb; pdb.set_trace()
-    print(o.a)
+    # import pdb; pdb.set_trace()
+    # print(o.a)
 
 
 # def test_pass_type():
@@ -501,9 +502,11 @@ def test_generic():
 #     # ls = get_list(jitted, jitted(10))
 #     ls = get_list(types.int64, 10)
 
-import sys
+# import sys
 
 # test_trivial_single_member_jit()
-test_generic()
+# test_generic()
 # test_pass_type()
 # test_single_list_trivial()
+# test_single_member_jit()
+# test_single_member_python()

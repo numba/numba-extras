@@ -449,3 +449,22 @@ class jitclass:
     @classmethod
     def get_meta(cls, orig_class, params):
         return cls.__meta_cache[orig_class]
+
+from numba.extending import typeof_impl
+from numba.core.typing.typeof import _typeof_type as numba_typeof_type
+
+@typeof_impl.register(type)
+def _typeof_type(val, c):
+    """ This function is a workaround for """
+
+    typ = numba_typeof_type(val, c)
+
+    # import pdb; pdb.set_trace()
+    if typ is None:
+        if hasattr(val, "_numba_type_"):
+            return val._numba_type_
+        else:
+            if val in jitclass._jitclass__cache:
+                typ = jitclass._jitclass__cache[val]
+
+                return typ._numba_type_
