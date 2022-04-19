@@ -10,7 +10,7 @@ import numpy as np
 # It uses numba and code generation to generate efficient code.
 # The quicksort implementation in this file is a slightly adapted version of numpy's quicksort:
 # https://github.com/numpy/numpy/blob/master/numpy/core/src/npysort/quicksort.c.src
-_quicksort_template = '''
+_quicksort_template = """
 def quicksort(idxs, s, e, stack, {arr_names}):
     def lt(x, y):
         return {lt_impl_x_y}
@@ -90,25 +90,29 @@ def quicksort(idxs, s, e, stack, {arr_names}):
                 pj -= 1
                 pk -= 1
             idxs[pj] = vp
-'''
+"""
 
 
 def _get_quicksort(n_arrs):
-    arr_names = tuple('a{}'.format(i) for i in range(n_arrs))
-    lt_impl_x_y = '{an}[x] < {an}[y]'.format(an=arr_names[-1])
+    arr_names = tuple("a{}".format(i) for i in range(n_arrs))
+    lt_impl_x_y = "{an}[x] < {an}[y]".format(an=arr_names[-1])
     for an in reversed(arr_names[:-1]):
-        lt_impl_x_y = 'True if {an}[x] < {an}[y] else (False if {an}[x] > {an}[y] else ({lt_impl_x_y}))' \
-            .format(an=an, lt_impl_x_y=lt_impl_x_y)
-    quicksort_code = _quicksort_template.format(lt_impl_x_y=lt_impl_x_y, arr_names=', '.join(arr_names))
-    quicksort_module = compile(quicksort_code, __file__, 'exec')
+        lt_impl_x_y = "True if {an}[x] < {an}[y] else (False if {an}[x] > {an}[y] else ({lt_impl_x_y}))".format(
+            an=an, lt_impl_x_y=lt_impl_x_y
+        )
+    quicksort_code = _quicksort_template.format(
+        lt_impl_x_y=lt_impl_x_y, arr_names=", ".join(arr_names)
+    )
+    quicksort_module = compile(quicksort_code, __file__, "exec")
     # globals_dict = {}
     # locals_dict = {}
     # exec(quicksort_module, globals_dict, locals_dict)
     # return locals_dict['quicksort']
     exec(quicksort_module)
-    return locals()['quicksort']
+    return locals()["quicksort"]
 
-AOT_SORT_SUPPORTED_DTYPES = [np.dtype('int64'), np.dtype('int32'), np.dtype('float64')]
+
+AOT_SORT_SUPPORTED_DTYPES = [np.dtype("int64"), np.dtype("int32"), np.dtype("float64")]
 
 quicksort_1 = _get_quicksort(1)
 quicksort_2 = _get_quicksort(2)
