@@ -6,6 +6,7 @@ import tempfile
 import importlib
 import pathlib
 import argparse
+import inspect
 
 from distutils import log
 
@@ -123,10 +124,15 @@ class ParallelModuleCompiler(ModuleCompiler):
 
 
 class ParallelCC(CC):
-    def __init__(self, extension_name, source_module=None, output_dir=None):
+    def __init__(
+        self, extension_name, source_module=None, output_dir=None, output_file=None
+    ):
         super().__init__(extension_name, source_module)
         # need to record the output dir for the merge step
-        self._output_dir = output_dir
+        if output_dir is not None:
+            self._output_dir = output_dir
+        if output_file is not None:
+            self._output_file = output_file
 
     @global_compiler_lock
     def emit_object_file(self, filename):
@@ -291,9 +297,12 @@ def main():
             fn_name = args.function
             exported_name = args.name
             sig = args.signature
-            try:
-                fn = getattr(module, fn_name)
-            except AttributeError:
+            fns = inspect.getmembers(module, inspect.isfunction)
+            for (name, func) in fns:
+                if name == fn_name:
+                    fn = func
+                    break
+            else:
                 raise ImportError(f"function {fn_name} not found in {module.__name__}")
             p = pathlib.Path(args.o)
             cc = ParallelCC("my_module", output_dir=p.parent)
@@ -301,7 +310,7 @@ def main():
             cc.emit_object_file(args.o)
         elif args.kind == "merge":
             p = pathlib.Path(args.o)
-            cc = ParallelCC(p.stem, output_dir=p.parent)
+            cc = ParallelCC(p.stem, output_dir=p.parent, output_file=p.name)
             cc.merge_object_files(args.files)
         else:
             raise RuntimeError
