@@ -4,11 +4,14 @@ import importlib
 
 def test_compile_add_example():
     subprocess.run(
-        ["make", "clean"], cwd="numba_extras/parallel_aot/examples/add", check=True
+        ["mkdir", "-p", "/tmp/my_add"],
+        cwd="numba_extras/parallel_aot/examples/add",
+        check=True,
     )
     subprocess.run(
-        ["make", "-j10"], cwd="numba_extras/parallel_aot/examples/add", check=True
+        ["make", "clean"], cwd="numba_extras/parallel_aot/examples/add", check=True
     )
+    subprocess.run(["make"], cwd="numba_extras/parallel_aot/examples/add", check=True)
 
     cmd = ["ls"]
     ret = subprocess.run(cmd, cwd="/tmp/my_add", capture_output=True, check=True)
