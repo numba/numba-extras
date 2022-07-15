@@ -60,7 +60,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        pyver: [3.6, 3.7, 3.8]
+        pyver: ["3.7", "3.8", "3.9", "3.10"]
         runs-on: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -86,7 +86,7 @@ jobs:
       - name: Pytest
         shell: bash -l {0}
         run: |
-          pytest --pyargs numba_extras.tests
+          pytest --pyargs numba_extras
 
   dev_deploy:
     runs-on: ubuntu-latest
