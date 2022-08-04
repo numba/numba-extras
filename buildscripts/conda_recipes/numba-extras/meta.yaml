@@ -1,0 +1,36 @@
+package:
+   name: numba-extras
+   version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0') }}
+
+source:
+   path: ../../..
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', '0')|int }}
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+  noarch: python
+
+requirements:
+  # build and run dependencies are duplicated to avoid setuptools issues
+  # when we also set install_requires in setup.py
+  build:
+    - git
+  host:
+    - python
+    - numba
+    - setuptools
+  run:
+    - python
+    - numba
+
+test:
+  requires:
+    - pytest
+    - setuptools
+    - faulthandler             # [py27 and (not (armv6l or armv7l))]
+
+about:
+  home: https://github.com/numba/numba-extras
+  license: BSD
+  license_file: LICENSE
+  summary: numba-extras extends Numba with multiple utilities
