@@ -108,7 +108,9 @@ class ParallelModuleCompiler(ModuleCompiler):
                 "environment_gvs": self.environment_gvs,
                 "export_entries": self.export_entries,
             }
-            with pathlib.Path(self.filename).with_suffix(".pickle").open("wb") as f:
+            with pathlib.Path(self.filename).with_suffix(".pickle").open(
+                "wb"
+            ) as f:
                 pickle.dump(d, f)
 
         # Hide all functions in the DLL except those explicitly exported
@@ -125,7 +127,11 @@ class ParallelModuleCompiler(ModuleCompiler):
 
 class ParallelCC(CC):
     def __init__(
-        self, extension_name, source_module=None, output_dir=None, output_file=None
+        self,
+        extension_name,
+        source_module=None,
+        output_dir=None,
+        output_file=None,
     ):
         super().__init__(extension_name, source_module)
         # need to record the output dir for the merge step
@@ -148,7 +154,9 @@ class ParallelCC(CC):
         )
         compiler.external_init_function = self._init_function
         temp_obj = str(pathlib.Path(filename).resolve())
-        log.info("generating LLVM code for '%s' into %s", self._basename, temp_obj)
+        log.info(
+            "generating LLVM code for '%s' into %s", self._basename, temp_obj
+        )
         compiler.write_native_object(temp_obj, wrap=False)
 
     def _compile_python_wrapper(self, files, build_dir):
@@ -164,7 +172,9 @@ class ParallelCC(CC):
         def get_path(file):
             path = pathlib.Path(file)
             if not path.exists():
-                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)
+                raise FileNotFoundError(
+                    errno.ENOENT, os.strerror(errno.ENOENT), file
+                )
             return str(path)
 
         objects = []
@@ -172,7 +182,9 @@ class ParallelCC(CC):
             objects += [get_path(file)]
 
             # read pickle information
-            with pathlib.Path(file).with_suffix(".pickle").resolve().open("rb") as f:
+            with pathlib.Path(file).with_suffix(".pickle").resolve().open(
+                "rb"
+            ) as f:
                 pickled = pickle.load(f)
 
             compiler.exported_function_types = {
@@ -201,7 +213,9 @@ class ParallelCC(CC):
 
     @global_compiler_lock
     def merge_object_files(self, files):
-        objects, dll_exports = self._compile_python_wrapper(files, self._output_dir)
+        objects, dll_exports = self._compile_python_wrapper(
+            files, self._output_dir
+        )
 
         temp_dir = tempfile.mkdtemp(prefix="pycc-build-%s-" % self._basename)
         objects += self._compile_mixins(temp_dir)
@@ -227,7 +241,9 @@ def make_parser():
     )
     sub_parsers = parser.add_subparsers(help="Numba AOT help", dest="kind")
     parser_llvm = sub_parsers.add_parser("emit-obj", help="emit object file")
-    parser_merge = sub_parsers.add_parser("merge", help="merge object files (*.o)")
+    parser_merge = sub_parsers.add_parser(
+        "merge", help="merge object files (*.o)"
+    )
 
     parser_llvm.add_argument(
         "-f",
@@ -257,7 +273,11 @@ def make_parser():
     )
 
     parser_llvm.add_argument(
-        "-o", action="store", type=str, required=True, help="Name of the output file"
+        "-o",
+        action="store",
+        type=str,
+        required=True,
+        help="Name of the output file",
     )
 
     parser_merge.add_argument(
@@ -303,7 +323,9 @@ def main(argv=None):
                     fn = func
                     break
             else:
-                raise ImportError(f"function {fn_name} not found in {module.__name__}")
+                raise ImportError(
+                    f"function {fn_name} not found in {module.__name__}"
+                )
             p = pathlib.Path(args.o)
             cc = ParallelCC("my_module", output_dir=p.parent)
             cc.export(exported_name, sig)(fn)

@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import numba
-import numba.pycc
 import numpy as np
 
 # cc = numba.pycc.CC('extension')
 
-# An iterative quicksort implementation which sorts multiple arrays doing row-wise comparisons.
+# An iterative quicksort implementation which sorts multiple arrays doing
+# row-wise comparisons.
 # It uses numba and code generation to generate efficient code.
-# The quicksort implementation in this file is a slightly adapted version of numpy's quicksort:
+# The quicksort implementation in this file is a slightly adapted version of
+# numpy's quicksort:
 # https://github.com/numpy/numpy/blob/master/numpy/core/src/npysort/quicksort.c.src
 _quicksort_template = """
 def quicksort(idxs, s, e, stack, {arr_names}):
@@ -46,7 +46,8 @@ def quicksort(idxs, s, e, stack, {arr_names}):
             # this is our pivot value
             vp = idxs[pm]
 
-            # stash pivot in last unknown element of interval (pr has to be greater than pm from above)
+            # stash pivot in last unknown element of interval (pr has to be
+            # greater than pm from above)
             pi = pl
             pj = pr - 1
             swap(pm, pj)
@@ -97,7 +98,7 @@ def _get_quicksort(n_arrs):
     arr_names = tuple("a{}".format(i) for i in range(n_arrs))
     lt_impl_x_y = "{an}[x] < {an}[y]".format(an=arr_names[-1])
     for an in reversed(arr_names[:-1]):
-        lt_impl_x_y = "True if {an}[x] < {an}[y] else (False if {an}[x] > {an}[y] else ({lt_impl_x_y}))".format(
+        lt_impl_x_y = "True if {an}[x] < {an}[y] else (False if {an}[x] > {an}[y] else ({lt_impl_x_y}))".format(  # noqa: E501
             an=an, lt_impl_x_y=lt_impl_x_y
         )
     quicksort_code = _quicksort_template.format(
@@ -112,50 +113,16 @@ def _get_quicksort(n_arrs):
     return locals()["quicksort"]
 
 
-AOT_SORT_SUPPORTED_DTYPES = [np.dtype("int64"), np.dtype("int32"), np.dtype("float64")]
+AOT_SORT_SUPPORTED_DTYPES = [
+    np.dtype("int64"),
+    np.dtype("int32"),
+    np.dtype("float64"),
+]
 
 quicksort_1 = _get_quicksort(1)
 quicksort_2 = _get_quicksort(2)
 quicksort_3 = _get_quicksort(3)
 quicksort_4 = _get_quicksort(4)
-
-# for dt1 in AOT_SORT_SUPPORTED_DTYPES:
-#     # cc.export(
-#     print(
-#         'quicksort_{}'.format(dt1),
-#         'none(int64[:], int64, int64, int64[:], {}[:])'.format(dt1)
-#     )
-#     # )(_get_quicksort(1))
-
-# for dt1 in AOT_SORT_SUPPORTED_DTYPES:
-#     for dt2 in AOT_SORT_SUPPORTED_DTYPES:
-#         # cc.export(
-#         print(
-#             'quicksort_{}_{}'.format(dt1, dt2),
-#             'none(int64[:], int64, int64, int64[:], {}[:], {}[:])'.format(dt1, dt2)
-#         )
-#         # )(_get_quicksort(2))
-
-# for dt1 in AOT_SORT_SUPPORTED_DTYPES:
-#     for dt2 in AOT_SORT_SUPPORTED_DTYPES:
-#         for dt3 in AOT_SORT_SUPPORTED_DTYPES:
-#             # cc.export(
-#             print(
-#                 'quicksort_{}_{}_{}'.format(dt1, dt2, dt3),
-#                 'none(int64[:], int64, int64, int64[:], {}[:], {}[:], {}[:])'.format(dt1, dt2, dt3)
-#             )
-#             # )(_get_quicksort(3))
-
-# for dt1 in AOT_SORT_SUPPORTED_DTYPES:
-#     for dt2 in AOT_SORT_SUPPORTED_DTYPES:
-#         for dt3 in AOT_SORT_SUPPORTED_DTYPES:
-#             for dt4 in AOT_SORT_SUPPORTED_DTYPES:
-#                 # cc.export(
-#                 print(
-#                     'quicksort_{}_{}_{}_{}'.format(dt1, dt2, dt3, dt4),
-#                     'none(int64[:], int64, int64, int64[:], {}[:], {}[:], {}[:], {}[:])'.format(dt1, dt2, dt3, dt4)
-#                 )
-#                 # )(_get_quicksort(4))
 
 # if __name__ == "__main__":
 #     cc.compile()

@@ -1,1 +1,1 @@
-from .aot import main
+from .aot import main  # noqa: F401

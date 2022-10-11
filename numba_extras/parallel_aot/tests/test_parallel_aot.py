@@ -47,7 +47,9 @@ def test_compile_add_example():
     parallel_aot.main(argv)
 
     cmd = ["ls"]
-    ret = subprocess.run(cmd, cwd="/tmp/my_add", capture_output=True, check=True)
+    ret = subprocess.run(
+        cmd, cwd="/tmp/my_add", capture_output=True, check=True
+    )
     files = ret.stdout.decode("utf-8").split("\n")
     for filename in ["int32", "int64", "float64", "float64"]:
         assert f"add_{filename}.o" in files
