@@ -3,15 +3,13 @@ import importlib
 from numba_extras import parallel_aot
 
 
-def test_compile_add_example():
-    subprocess.run(
-        ["mkdir", "-p", "/tmp/my_add"],
-        check=True,
-    )
+def test_compile_add_example(tmp_path):
+    tmp = tmp_path / "my_add"
+    tmp.mkdir()
 
-    with open("/tmp/my_add/add.py", "w") as f:
-        s = "def add(a, b):" "    return a + b"
-        f.write(s)
+    p = tmp / 'add.py'
+    content = "def add(a, b): return a + b"
+    p.write_text(content)
 
     tup = (
         ("add", "int32(int32, int32)", "add_int32"),
@@ -21,7 +19,7 @@ def test_compile_add_example():
     )
     for func, sig, func_name in tup:
         argv = [
-            "/tmp/my_add/add.py",
+            str(p),
             "emit-obj",
             "-f",
             func,
@@ -30,25 +28,25 @@ def test_compile_add_example():
             "-s",
             sig,
             "-o",
-            f"/tmp/my_add/{func_name}.o",
+            f"{(tmp / func_name).with_suffix('.o')}"
         ]
         parallel_aot.main(argv)
 
     argv = [
-        "/tmp/my_add/add.py",
+        f"{tmp / 'add.py'}",
         "merge",
-        "/tmp/my_add/add_int32.o",
-        "/tmp/my_add/add_int64.o",
-        "/tmp/my_add/add_float32.o",
-        "/tmp/my_add/add_float64.o",
+        f"{tmp / 'add_int32.o'}",
+        f"{tmp / 'add_int64.o'}",
+        f"{tmp / 'add_float32.o'}",
+        f"{tmp / 'add_float64.o'}",
         "-o",
-        "/tmp/my_add/add.so",
+        f"{tmp / 'add.so'}",
     ]
     parallel_aot.main(argv)
 
     cmd = ["ls"]
     ret = subprocess.run(
-        cmd, cwd="/tmp/my_add", capture_output=True, check=True
+        cmd, cwd=str(tmp), capture_output=True, check=True
     )
     files = ret.stdout.decode("utf-8").split("\n")
     for filename in ["int32", "int64", "float64", "float64"]:
@@ -57,7 +55,7 @@ def test_compile_add_example():
 
     assert "add.so" in files
 
-    spec = importlib.machinery.PathFinder().find_spec("add", ["/tmp/my_add"])
+    spec = importlib.machinery.PathFinder().find_spec("add", [str(tmp)])
     module = importlib.util.module_from_spec(spec)
     assert module.add_int64(2, 3) == 5
     assert module.add_float32(2.2, 3.3) == 5.5
