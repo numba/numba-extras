@@ -1,13 +1,18 @@
+import pytest
+import sys
 import subprocess
 import importlib
 from numba_extras import parallel_aot
 
 
+@pytest.mark.skipIf(
+    sys.platform == "win32", reason="Parallel AOT not supported on Windows"
+)
 def test_compile_add_example(tmp_path):
     tmp = tmp_path / "my_add"
     tmp.mkdir()
 
-    p = tmp / 'add.py'
+    p = tmp / "add.py"
     content = "def add(a, b): return a + b"
     p.write_text(content)
 
@@ -28,7 +33,7 @@ def test_compile_add_example(tmp_path):
             "-s",
             sig,
             "-o",
-            f"{(tmp / func_name).with_suffix('.o')}"
+            f"{(tmp / func_name).with_suffix('.o')}",
         ]
         parallel_aot.main(argv)
 
@@ -45,9 +50,7 @@ def test_compile_add_example(tmp_path):
     parallel_aot.main(argv)
 
     cmd = ["ls"]
-    ret = subprocess.run(
-        cmd, cwd=str(tmp), capture_output=True, check=True
-    )
+    ret = subprocess.run(cmd, cwd=str(tmp), capture_output=True, check=True)
     files = ret.stdout.decode("utf-8").split("\n")
     for filename in ["int32", "int64", "float64", "float64"]:
         assert f"add_{filename}.o" in files
