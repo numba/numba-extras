@@ -5,10 +5,10 @@ import importlib
 from numba_extras import parallel_aot
 
 
-@pytest.mark.skipIf(
-    sys.platform == "win32", reason="Parallel AOT not supported on Windows"
-)
 def test_compile_add_example(tmp_path):
+    if sys.platform == "win32":
+        pytest.skip("Parallel AOT not supported on Windows")
+
     tmp = tmp_path / "my_add"
     tmp.mkdir()
 
