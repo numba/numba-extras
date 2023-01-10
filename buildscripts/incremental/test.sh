@@ -20,8 +20,7 @@ if [[ "$unamestr" == 'Linux' ]]; then
     if [[ "${BITS32}" == "yes" ]]; then
         SEGVCATCH=""
     else
-        # SEGVCATCH=catchsegv
-        SEGVCATCH=""
+        SEGVCATCH=catchsegv
     fi
 elif [[ "$unamestr" == 'Darwin' ]]; then
   SEGVCATCH=""
