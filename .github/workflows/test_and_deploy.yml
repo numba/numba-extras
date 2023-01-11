@@ -32,6 +32,12 @@ jobs:
         run: |
           conda install -c numba conda-build python=${{ env.MAIN_PYVER }} numba>=0.45 flake8 pytest pip
           pip install --no-deps -e .
+      - name: Install glibc
+        shell: bash -l {0}
+        run: |
+          if [[ $(uname) == Linux ]]; then
+            sudo apt-get install glibc-tools
+          fi
       - name: Lint with flake8
         shell: bash -l {0}
         run: |
