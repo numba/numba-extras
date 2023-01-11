@@ -31,12 +31,13 @@ jobs:
         shell: bash -l {0}
         run: |
           conda install -c numba conda-build python=${{ env.MAIN_PYVER }} numba>=0.45 flake8 pytest pip
-          if [[ $(uname) == Linux ]]; then
-              conda install gcc_linux-64 gxx_linux-64
-          elif  [[ $(uname) == Darwin ]]; then
-              conda install clang_osx-64 clangxx_osx-64
-          fi
           pip install --no-deps -e .
+      - name: Install glibc
+        shell: bash -l {0}
+        run: |
+          if [[ $(uname) == Linux ]]; then
+            apt-get install libc-bin
+          fi
       - name: Lint with flake8
         shell: bash -l {0}
         run: |
