@@ -36,7 +36,7 @@ jobs:
         shell: bash -l {0}
         run: |
           if [[ $(uname) == Linux ]]; then
-            sudo apt-get install libc-bin
+            sudo apt-get install glibc-tools
           fi
       - name: Lint with flake8
         shell: bash -l {0}
